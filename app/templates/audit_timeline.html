@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}Audit &amp; Trace Timeline · School Ops Agent{% endblock %}
+{% block content %}
+<h1>Audit &amp; Trace Timeline</h1>
+<div class="card">
+  <h3>Channel → Intent → Action → Notification Traces</h3>
+  <table>
+    <thead><tr><th>Time</th><th>Correlation ID</th><th>Channel</th><th>Intent</th><th>Action</th><th>Notification</th><th>Status</th></tr></thead>
+    <tbody>
+      {% for t in traces %}
+      <tr>
+        <td>{{ t.created_at }}</td><td><code>{{ t.correlation_id }}</code></td><td>{{ t.channel }}</td>
+        <td><strong>{{ t.intent }}</strong></td><td>{{ t.action }}</td><td>{{ t.notification }}</td>
+        <td><span class="badge {% if t.status == 'denied' %}badge-danger{% else %}badge-ok{% endif %}">{{ t.status }}</span></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div class="card">
+  <h3>System Audit Events</h3>
+  <table>
+    <thead><tr><th>Time</th><th>Correlation ID</th><th>Actor Role</th><th>Event</th><th>Resource</th><th>Outcome</th><th>Details</th></tr></thead>
+    <tbody>
+      {% for e in events %}
+      <tr>
+        <td>{{ e.created_at }}</td>
+        <td><code>{{ e.correlation_id }}</code></td>
+        <td>{{ e.actor_role or 'system' }}</td>
+        <td><strong>{{ e.event_type }}</strong></td>
+        <td>{{ e.resource_type or '-' }} {{ e.resource_id or '' }}</td>
+        <td><span class="badge {% if e.outcome == 'denied' %}badge-danger{% else %}badge-ok{% endif %}">{{ e.outcome }}</span></td>
+        <td><code>{{ e.details_json }}</code></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

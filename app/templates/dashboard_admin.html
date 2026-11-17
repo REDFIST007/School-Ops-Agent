@@ -1,0 +1,146 @@
+{% extends "base.html" %}
+{% block title %}Admin Dashboard · School Ops Agent{% endblock %}
+{% block content %}
+<h1>School Admin Dashboard · {{ school.name }}</h1>
+<div class="grid">
+  <div class="card">
+    <h3>1. Create Grade / Class</h3>
+    <form onsubmit="createClass(event)">
+      <label>Class Name</label>
+      <input type="text" id="cls_name" placeholder="Grade 8 - A" required />
+      <label>Grade</label>
+      <input type="text" id="cls_grade" placeholder="8" required />
+      <button type="submit">Create Class</button>
+      <div id="cls_msg" class="status-msg"></div>
+    </form>
+    <h4>Existing Classes</h4>
+    <ul>{% for c in classes %}<li><strong>{{ c.name }}</strong> (Grade {{ c.grade }}) · <code>{{ c.id }}</code></li>{% endfor %}</ul>
+  </div>
+
+  <div class="card">
+    <h3>2. Issue Scoped Invite</h3>
+    <form onsubmit="createInvite(event)">
+      <label>Role</label>
+      <select id="inv_role">
+        <option value="teacher">Teacher</option>
+        <option value="student">Student</option>
+        <option value="guardian">Parent / Guardian</option>
+      </select>
+      <label>Invitee Name</label>
+      <input type="text" id="inv_name" required />
+      <label>Class (for Teacher/Student)</label>
+      <select id="inv_class">
+        <option value="">-- Select Class --</option>
+        {% for c in classes %}<option value="{{ c.id }}">{{ c.name }}</option>{% endfor %}
+      </select>
+      <label>Linked Student (for Guardian)</label>
+      <select id="inv_student">
+        <option value="">-- Select Student --</option>
+        {% for u in users if u.role == 'student' %}<option value="{{ u.id }}">{{ u.full_name }}</option>{% endfor %}
+      </select>
+      <button type="submit">Generate Invite Code</button>
+      <div id="inv_res" class="status-msg"></div>
+    </form>
+  </div>
+
+  <div class="card">
+    <h3>3. Upload Roster or Policy Document</h3>
+    <form onsubmit="uploadDoc(event)">
+      <label>Document Type</label>
+      <select id="doc_type">
+        <option value="class_roster">Class Roster (CSV)</option>
+        <option value="school_policy">School Policy</option>
+        <option value="assignment_brief">Assignment Brief</option>
+      </select>
+      <label>Paste Text / CSV</label>
+      <textarea id="doc_text" rows="4" placeholder="student_name,class_name,guardian_contact&#10;Aarav,Grade 8 - A,+919999999999"></textarea>
+      <label>Or Upload File (PDF, DOCX, CSV, TXT)</label>
+      <input type="file" id="doc_file" />
+      <button type="submit">Upload &amp; Parse</button>
+      <div id="doc_msg" class="status-msg"></div>
+    </form>
+  </div>
+
+  <div class="card">
+    <h3>4. School Policy &amp; Reminders</h3>
+    <p style="font-size:13px;">Quiet Hours: <strong>{{ school.quiet_hours_start }} – {{ school.quiet_hours_end }}</strong> · Escalation: <strong>{{ school.escalation_hours }}h</strong></p>
+    <button onclick="runReminders(false)">Run Reminder Job (Respect Policy)</button>
+    <button class="btn-secondary" onclick="runReminders(true)">Run Demo Reminders (Ignore Quiet Hours)</button>
+    <div id="rem_msg" class="status-msg"></div>
+  </div>
+</div>
+
+<div class="card">
+  <h3>Documents Pending / Parsed</h3>
+  <table>
+    <thead><tr><th>Type</th><th>File</th><th>State</th><th>Confidence</th><th>Injection Flag</th><th>Action</th></tr></thead>
+    <tbody>
+      {% for d in docs %}
+      <tr>
+        <td>{{ d.doc_type }}</td>
+        <td>{{ d.filename }}</td>
+        <td><span class="badge">{{ d.approval_state }}</span></td>
+        <td>{{ d.confidence }}</td>
+        <td>{% if d.prompt_injection_flagged %}<span class="badge badge-danger">FLAGGED</span>{% else %}Clean{% endif %}</td>
+        <td><a href="/documents/{{ d.id }}">Review</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div class="card">
+  <h3>Active Invites</h3>
+  <table>
+    <thead><tr><th>Code</th><th>Role</th><th>Invitee</th><th>Status</th></tr></thead>
+    <tbody>
+      {% for i in invites %}
+      <tr>
+        <td><code>{{ i.code }}</code></td>
+        <td>{{ i.role }}</td>
+        <td>{{ i.invitee_name }}</td>
+        <td>{% if i.used_at %}Used{% else %}<span class="badge badge-ok">Open</span>{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+async function createClass(e) {
+  e.preventDefault();
+  await apiPost('/api/schools/classes', {
+    name: document.getElementById('cls_name').value,
+    grade: document.getElementById('cls_grade').value
+  });
+  location.reload();
+}
+async function createInvite(e) {
+  e.preventDefault();
+  const res = await apiPost('/api/auth/invites', {
+    role: document.getElementById('inv_role').value,
+    invitee_name: document.getElementById('inv_name').value,
+    class_id: document.getElementById('inv_class').value || null,
+    linked_student_id: document.getElementById('inv_student').value || null
+  });
+  document.getElementById('inv_res').innerHTML = `Created invite: <code>${res.code}</code>`;
+}
+async function uploadDoc(e) {
+  e.preventDefault();
+  const fd = new FormData();
+  fd.append('doc_type', document.getElementById('doc_type').value);
+  const f = document.getElementById('doc_file').files[0];
+  if (f) fd.append('file', f);
+  else fd.append('pasted_text', document.getElementById('doc_text').value);
+  const res = await fetch('/api/documents/upload', { method: 'POST', body: fd });
+  const data = await res.json();
+  if (!res.ok) { document.getElementById('doc_msg').textContent = data.detail; return; }
+  window.location.href = '/documents/' + data.document.id;
+}
+async function runReminders(ignoreQuiet) {
+  const res = await apiPost('/api/reminders/run?ignore_quiet_hours=' + ignoreQuiet, {});
+  document.getElementById('rem_msg').textContent = `QuietHours=${res.quiet_hours_active}, Counts=${JSON.stringify(res.counts)}`;
+}
+</script>
+{% endblock %}

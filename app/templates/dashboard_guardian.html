@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Guardian Dashboard · School Ops Agent{% endblock %}
+{% block content %}
+<h1>Parent / Guardian Visibility</h1>
+<div class="card">
+  <h3>Linked Children Progress (High-Level)</h3>
+  <table>
+    <thead><tr><th>Student</th><th>Assignment</th><th>Status</th><th>Due Date</th></tr></thead>
+    <tbody>
+      {% for c in children %}
+      <tr>
+        <td>{{ c.student_name }}</td>
+        <td>{{ c.assignment_title or 'No active assignment' }}</td>
+        <td><span class="badge">{{ c.status or 'N/A' }}</span></td>
+        <td>{{ c.due_date or '-' }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+<div class="card">
+  <h3>Digest &amp; Escalation Messages</h3>
+  {% for r in reminders %}
+  <p><span class="badge">{{ r.reminder_kind }}</span> {{ r.message }} <span style="color:var(--muted);font-size:12px;">({{ r.created_at }})</span></p>
+  {% else %}
+  <p style="color:var(--muted);">No escalation messages.</p>
+  {% endfor %}
+</div>
+{% endblock %}

@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{% block title %}School Operations Agent Platform{% endblock %}</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <header>
+    <div>
+      <span class="brand">School Ops Agent</span>
+      {% if user %}
+      <span class="badge" style="margin-left:10px;">{{ user.role | upper }} · {{ user.school_name }}</span>
+      {% endif %}
+    </div>
+    <nav>
+      {% if user %}
+        <a href="/dashboard">Dashboard</a>
+        {% if user.role in ['admin', 'teacher'] %}
+          <a href="/audit">Audit &amp; Traces</a>
+        {% endif %}
+        <a href="/simulator">Chat Simulator</a>
+        <a href="#" onclick="logoutUser()">Logout ({{ user.full_name }})</a>
+      {% else %}
+        <a href="/login">Login</a>
+        <a href="/register">Register School</a>
+        <a href="/simulator">Chat Simulator</a>
+      {% endif %}
+    </nav>
+  </header>
+  <div class="container">
+    {% block content %}{% endblock %}
+  </div>
+  <script>
+    async function apiPost(url, body) {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Request failed');
+      return data;
+    }
+    async function logoutUser() {
+      await fetch('/api/auth/logout', { method: 'POST' });
+      window.location.href = '/login';
+    }
+  </script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

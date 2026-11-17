@@ -1,0 +1,127 @@
+{% extends "base.html" %}
+{% block title %}Teacher Dashboard · School Ops Agent{% endblock %}
+{% block content %}
+<div style="display:flex;justify-content:space-between;align-items:center;">
+  <h1>Teacher Dashboard</h1>
+  <span class="badge badge-ok"><span class="live-dot"></span>Live SSE Connected</span>
+</div>
+
+<div class="grid">
+  <div class="card">
+    <h3>Upload Assignment Brief</h3>
+    <form onsubmit="uploadBrief(event)">
+      <label>Paste Brief or Upload PDF/DOCX</label>
+      <textarea id="brief_text" rows="4" placeholder="Title: Algebra Worksheet&#10;Subject: Math&#10;Instructions: Solve problems 1-10"></textarea>
+      <input type="file" id="brief_file" />
+      <button type="submit">Parse Brief</button>
+    </form>
+  </div>
+
+  <div class="card">
+    <h3>Create Assignment Directly</h3>
+    <form onsubmit="createAsg(event)">
+      <label>Title</label>
+      <input type="text" id="asg_title" required />
+      <label>Subject</label>
+      <input type="text" id="asg_subject" required />
+      <label>Due Date (YYYY-MM-DD)</label>
+      <input type="text" id="asg_due" placeholder="2026-11-25" />
+      <label>Target Class</label>
+      <select id="asg_class" required>
+        {% for c in classes %}<option value="{{ c.id }}">{{ c.name }}</option>{% endfor %}
+      </select>
+      <label>Instructions</label>
+      <textarea id="asg_inst" rows="2" required></textarea>
+      <button type="submit">Publish Assignment</button>
+    </form>
+  </div>
+</div>
+
+<div class="card">
+  <h3>Student Progress, Blocked Alerts &amp; Submissions</h3>
+  <table>
+    <thead><tr><th>Student</th><th>Assignment</th><th>Status</th><th>Notes</th><th>Give Feedback / Decision</th></tr></thead>
+    <tbody>
+      {% for sw in student_work %}
+      <tr>
+        <td>{{ sw.student_name }}</td>
+        <td>{{ sw.assignment_title }}</td>
+        <td>
+          <span class="badge {% if sw.status == 'blocked' %}badge-danger{% elif sw.status in ['submitted', 'completed'] %}badge-ok{% elif sw.status == 'revision_requested' %}badge-warn{% endif %}">
+            {{ sw.status }}
+          </span>
+        </td>
+        <td>{{ sw.blocker_note or sw.progress_note or '-' }}</td>
+        <td>
+          <div style="display:flex;gap:6px;">
+            <input type="text" id="fb_{{ sw.id }}" placeholder="Feedback comment..." style="width:180px;" />
+            <button onclick="sendFeedback('{{ sw.id }}', 'revision_requested')" class="btn-secondary" style="margin-top:0;">Revise</button>
+            <button onclick="sendFeedback('{{ sw.id }}', 'completed')" style="margin-top:0;">Complete</button>
+          </div>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <button onclick="runReminders()" style="margin-top:14px;">Trigger Reminders Now (Demo)</button>
+  <span id="rem_status" class="status-msg" style="margin-left:10px;"></span>
+</div>
+
+<div class="card">
+  <h3>Document Parse Approvals</h3>
+  <table>
+    <thead><tr><th>Type</th><th>File</th><th>State</th><th>Confidence</th><th>Action</th></tr></thead>
+    <tbody>
+      {% for d in docs %}
+      <tr>
+        <td>{{ d.doc_type }}</td><td>{{ d.filename }}</td><td><span class="badge">{{ d.approval_state }}</span></td><td>{{ d.confidence }}</td>
+        <td><a href="/documents/{{ d.id }}">Review &amp; Approve</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+const evtSource = new EventSource('/api/events/stream');
+evtSource.onmessage = (e) => {
+  const payload = JSON.parse(e.data);
+  if (payload.type && payload.type !== 'connected') {
+    location.reload();
+  }
+};
+async function uploadBrief(e) {
+  e.preventDefault();
+  const fd = new FormData();
+  fd.append('doc_type', 'assignment_brief');
+  const f = document.getElementById('brief_file').files[0];
+  if (f) fd.append('file', f);
+  else fd.append('pasted_text', document.getElementById('brief_text').value);
+  const res = await fetch('/api/documents/upload', { method: 'POST', body: fd });
+  const data = await res.json();
+  if (res.ok) window.location.href = '/documents/' + data.document.id;
+}
+async function createAsg(e) {
+  e.preventDefault();
+  await apiPost('/api/assignments', {
+    title: document.getElementById('asg_title').value,
+    subject: document.getElementById('asg_subject').value,
+    due_date: document.getElementById('asg_due').value || null,
+    target_type: 'class',
+    target_class_id: document.getElementById('asg_class').value,
+    instructions: document.getElementById('asg_inst').value
+  });
+  location.reload();
+}
+async function sendFeedback(saId, decision) {
+  const comment = document.getElementById('fb_' + saId).value || decision;
+  await apiPost(`/api/assignments/${saId}/feedback`, { decision, comment });
+  location.reload();
+}
+async function runReminders() {
+  const res = await apiPost('/api/reminders/run?ignore_quiet_hours=true', {});
+  document.getElementById('rem_status').textContent = JSON.stringify(res.counts);
+}
+</script>
+{% endblock %}

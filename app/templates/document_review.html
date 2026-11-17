@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% block title %}Document Review · School Ops Agent{% endblock %}
+{% block content %}
+<h1>Document Review: {{ doc.filename }}</h1>
+<div class="card">
+  <p>
+    <strong>Type:</strong> {{ doc.doc_type }} ·
+    <strong>State:</strong> <span class="badge">{{ doc.approval_state }}</span> ·
+    <strong>Confidence:</strong> {{ doc.confidence }}
+    {% if doc.prompt_injection_flagged %}
+      <span class="badge badge-danger">PROMPT INJECTION DETECTED &amp; QUARANTINED</span>
+    {% endif %}
+  </p>
+  <h3>Extracted Structured Fields</h3>
+  <pre style="background:#f1f5f9;padding:12px;border-radius:6px;overflow:auto;">{{ parsed | tojson(indent=2) }}</pre>
+
+  {% if ambiguities %}
+  <h4>Ambiguity / Clarification Notes</h4>
+  <ul>{% for a in ambiguities %}<li>{{ a }}</li>{% endfor %}</ul>
+  {% endif %}
+
+  {% if missing or doc.approval_state == 'needs_clarification' %}
+  <form onsubmit="submitClarify(event)">
+    <h4>Provide Missing / Clarified Values</h4>
+    {% for m in missing %}
+      <label>{{ m }}</label>
+      <input type="text" class="clarify-input" data-key="{{ m }}" required />
+    {% endfor %}
+    {% if not missing %}
+      <label>Target Class / Confirmation Note</label>
+      <input type="text" class="clarify-input" data-key="target_ref" placeholder="Grade 8 - A" />
+    {% endif %}
+    <button type="submit">Submit Clarification</button>
+  </form>
+  {% endif %}
+
+  {% if doc.approval_state == 'pending_review' %}
+  <div style="margin-top:14px;">
+    <label>Target Class (if creating assignment)</label>
+    <select id="approve_cls">
+      {% for c in classes %}<option value="{{ c.id }}">{{ c.name }}</option>{% endfor %}
+    </select>
+    <button onclick="approveDoc()">Approve &amp; Commit Action</button>
+  </div>
+  {% endif %}
+</div>
+
+{% if conflicts %}
+<div class="card">
+  <h3>Roster Conflicts Requiring Resolution</h3>
+  <table>
+    <thead><tr><th>Row</th><th>Student</th><th>Class</th><th>Issue</th><th>State</th><th>Resolve</th></tr></thead>
+    <tbody>
+      {% for cf in conflicts %}
+      <tr>
+        <td>{{ cf.row_index }}</td><td>{{ cf.student_name }}</td><td>{{ cf.class_name }}</td><td>{{ cf.details }}</td>
+        <td><span class="badge">{{ cf.resolution_state }}</span></td>
+        <td>
+          {% if cf.resolution_state == 'open' %}
+          <button onclick="resolveConflict('{{ cf.id }}', 'merged')">Merge</button>
+          <button class="btn-secondary" onclick="resolveConflict('{{ cf.id }}', 'skipped')">Skip</button>
+          {% else %}Resolved{% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+{% endblock %}
+{% block scripts %}
+<script>
+async function submitClarify(e) {
+  e.preventDefault();
+  const answers = {};
+  document.querySelectorAll('.clarify-input').forEach(el => { answers[el.dataset.key] = el.value; });
+  await apiPost('/api/documents/{{ doc.id }}/clarify', { answers });
+  location.reload();
+}
+async function approveDoc() {
+  const clsId = document.getElementById('approve_cls') ? document.getElementById('approve_cls').value : '';
+  await apiPost('/api/documents/{{ doc.id }}/approve?create_assignment_flag=true&target_class_id=' + encodeURIComponent(clsId), {});
+  window.location.href = '/dashboard';
+}
+async function resolveConflict(cid, resolution) {
+  await apiPost(`/api/documents/conflicts/${cid}/resolve`, { resolution });
+  location.reload();
+}
+</script>
+{% endblock %}

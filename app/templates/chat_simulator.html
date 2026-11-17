@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}Chat Simulator · School Ops Agent{% endblock %}
+{% block content %}
+<div class="card" style="max-width:720px;margin:0 auto;">
+  <h2>Multi-Channel Chat Simulator (Telegram / WhatsApp / Web)</h2>
+  <p style="font-size:13px;color:var(--muted);">
+    Test canonical message envelope routing without external webhooks. First link your chat identity with <code>/link INV-XXXXXXXX</code>.
+  </p>
+  <form onsubmit="sendSim(event)">
+    <label>Channel</label>
+    <select id="sim_channel">
+      <option value="telegram">Telegram</option>
+      <option value="whatsapp">WhatsApp</option>
+      <option value="web">Web</option>
+    </select>
+    <label>External Chat / Phone ID</label>
+    <input type="text" id="sim_user_id" value="tg_user_101" required />
+    <label>Message Text</label>
+    <textarea id="sim_text" rows="3" placeholder="/link INV-XXXXXXXX  OR  I am blocked on question 3" required></textarea>
+    <button type="submit">Send Message</button>
+  </form>
+  <div id="sim_log" style="margin-top:16px;"></div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+async function sendSim(e) {
+  e.preventDefault();
+  const ch = document.getElementById('sim_channel').value;
+  const uid = document.getElementById('sim_user_id').value;
+  const txt = document.getElementById('sim_text').value;
+  const msgId = 'sim_' + Date.now();
+  const data = await apiPost('/api/simulator/message', {
+    channel: ch,
+    external_user_id: uid,
+    message_id: msgId,
+    text: txt
+  });
+  const el = document.createElement('div');
+  el.className = 'card';
+  el.innerHTML = `<strong>[${ch}:${uid}]</strong> ${txt}<br/>
+    <span class="badge badge-ok">Intent: ${data.intent}</span>
+    <span class="badge">Status: ${data.status}</span>
+    <span class="badge">CID: ${data.correlation_id}</span>
+    <p style="margin:8px 0 0;"><strong>Agent Reply:</strong> ${data.reply}</p>`;
+  document.getElementById('sim_log').prepend(el);
+}
+</script>
+{% endblock %}

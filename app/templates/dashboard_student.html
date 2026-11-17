@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}Student Dashboard · School Ops Agent{% endblock %}
+{% block content %}
+<h1>My Assignments</h1>
+{% for w in my_work %}
+<div class="card">
+  <div style="display:flex;justify-content:space-between;">
+    <h3>{{ w.assignment_title }} ({{ w.subject }})</h3>
+    <span class="badge">{{ w.status }}</span>
+  </div>
+  <p style="font-size:13px;color:var(--muted);">Due: {{ w.due_date or 'TBD' }}</p>
+  <p>{{ w.instructions }}</p>
+  <div class="grid">
+    <div>
+      <label>Progress / Blocked Update</label>
+      <input type="text" id="note_{{ w.id }}" placeholder="Working on Q2 / Stuck on Q3..." />
+      <button onclick="updateProg('{{ w.id }}', 'in_progress')" class="btn-secondary">Mark In Progress</button>
+      <button onclick="updateProg('{{ w.id }}', 'blocked')" class="btn-danger">Report Blocked</button>
+    </div>
+    <div>
+      <label>Submit / Resubmit Work</label>
+      <textarea id="sub_{{ w.id }}" rows="2" placeholder="Paste your answer or link..."></textarea>
+      <button onclick="submitWork('{{ w.id }}')">Submit Work</button>
+    </div>
+  </div>
+</div>
+{% else %}
+<div class="card">No assignments assigned yet.</div>
+{% endfor %}
+
+<div class="card">
+  <h3>Teacher Feedback</h3>
+  {% for f in feedbacks %}
+  <p><strong>{{ f.decision }}</strong>: {{ f.comment }} <span style="color:var(--muted);font-size:12px;">({{ f.created_at }})</span></p>
+  {% else %}
+  <p style="color:var(--muted);">No feedback yet.</p>
+  {% endfor %}
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+async function updateProg(id, status) {
+  await apiPost(`/api/assignments/${id}/progress`, { status, note: document.getElementById('note_' + id).value });
+  location.reload();
+}
+async function submitWork(id) {
+  await apiPost(`/api/assignments/${id}/submit`, {
+    submission_type: 'text',
+    content_text: document.getElementById('sub_' + id).value
+  });
+  location.reload();
+}
+</script>
+{% endblock %}
